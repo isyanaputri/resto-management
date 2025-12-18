@@ -12,51 +12,37 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _userCtrl = TextEditingController(); // [cite: 66]
-  final TextEditingController _passCtrl = TextEditingController(); // [cite: 66]
+  final TextEditingController _userCtrl = TextEditingController();
+  final TextEditingController _passCtrl = TextEditingController();
   bool _isLoading = false;
+  
+  // Variabel untuk mengontrol tampilan password
+  bool _obscurePassword = true; 
 
   void _doLogin() async {
-    // Validasi input tidak boleh kosong [cite: 66]
     if (_userCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username dan Password wajib diisi!")),
+        const SnackBar(content: Text("Isi semua data!")),
       );
       return;
     }
 
     setState(() => _isLoading = true);
-
-    // Memanggil API Login [cite: 67, 83]
     final result = await ApiService().login(_userCtrl.text, _passCtrl.text);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result['status'] == 'success') { // [cite: 68]
-      String role = result['role']; // [cite: 68]
-      
-      // Navigasi Berdasarkan Role 
+    if (result['status'] == 'success') {
+      String role = result['role'];
       if (role == 'owner') {
-        // Bos bisa akses dashboard analisis [cite: 69]
-        Navigator.pushReplacement(
-          context, 
-          MaterialPageRoute(builder: (_) => const DashboardAnalisis())
-        );
-      } else if (role == 'staff') {
-        // Staff diarahkan ke manajemen meja [cite: 70]
-        Navigator.pushReplacement(
-          context, 
-          MaterialPageRoute(builder: (_) => const MejaScreen())
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardAnalisis()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MejaScreen()));
       }
     } else {
-      // Tampilkan error jika login gagal [cite: 71, 72]
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? "Login Gagal"),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(result['message'] ?? "Gagal"), backgroundColor: Colors.red),
       );
     }
   }
@@ -64,84 +50,96 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.accent, // Latar belakang Cream
+      backgroundColor: AppColors.accent,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(30),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.restaurant, size: 80, color: AppColors.primary),
-              const SizedBox(height: 20),
+              const Icon(Icons.restaurant_menu, size: 80, color: AppColors.primary),
+              const SizedBox(height: 10),
               const Text(
                 "RESTORA LOGIN",
-                style: TextStyle(
-                  fontSize: 28, 
-                  fontWeight: FontWeight.bold, 
-                  color: AppColors.primary
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
               const SizedBox(height: 40),
               
               // Input Username
-              TextField(
+              _buildInput(
                 controller: _userCtrl,
-                decoration: InputDecoration(
-                  labelText: "Username",
-                  labelStyle: const TextStyle(color: AppColors.primary),
-                  prefixIcon: const Icon(Icons.person, color: AppColors.primary),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                  ),
-                ),
+                label: "Username",
+                icon: Icons.person,
               ),
               const SizedBox(height: 20),
               
-              // Input Password
-              TextField(
+              // Input Password dengan tombol mata
+              _buildInput(
                 controller: _passCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: const TextStyle(color: AppColors.primary),
-                  prefixIcon: const Icon(Icons.lock, color: AppColors.primary),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                  ),
-                ),
+                label: "Password",
+                icon: Icons.lock,
+                isPassword: true,
+                obscureText: _obscurePassword,
+                onToggle: () {
+                  setState(() => _obscurePassword = !_obscurePassword);
+                },
               ),
               const SizedBox(height: 30),
               
-              // Tombol Login
+              // Tombol Masuk
               SizedBox(
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _doLogin,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary, // Warna Maroon
-                    foregroundColor: AppColors.accent, // Teks Cream
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                   child: _isLoading 
                     ? const CircularProgressIndicator(color: AppColors.accent)
-                    : const Text("MASUK", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    : const Text("MASUK", style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onToggle,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      style: const TextStyle(color: AppColors.primary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: AppColors.primary),
+        prefixIcon: Icon(icon, color: AppColors.primary),
+        // Menambahkan ikon mata di sebelah kanan jika ini input password
+        suffixIcon: isPassword 
+            ? IconButton(
+                icon: Icon(
+                  obscureText ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.primary,
+                ),
+                onPressed: onToggle,
+              )
+            : null,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
       ),
     );
