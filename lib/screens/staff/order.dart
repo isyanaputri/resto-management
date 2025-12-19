@@ -1,238 +1,198 @@
 import 'package:flutter/material.dart';
-import '../../configurasi/warna.dart';
-import '../../services/api_service.dart';
-import '../payment/payment.dart';
 
-// Model untuk item menu
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Menu Order',
+      theme: ThemeData(
+        scaffoldBackgroundColor: const Color(0xFF333333),
+        primarySwatch: Colors.brown,
+      ),
+      home: const MenuOrderScreen(),
+    );
+  }
+}
+
+// ======================= MODEL =======================
 class MenuItem {
-  final int id;
-  final String name, desc, img, category;
+  final String name;
+  final String image;
   final double price;
   int qty;
 
   MenuItem({
-    required this.id,
     required this.name,
-    required this.desc,
-    required this.img,
+    required this.image,
     required this.price,
-    required this.category,
     this.qty = 0,
   });
 }
 
-class OrderScreen extends StatefulWidget {
-  final String tableNumber;
-  const OrderScreen({super.key, required this.tableNumber});
+// ======================= SCREEN =======================
+class MenuOrderScreen extends StatefulWidget {
+  const MenuOrderScreen({super.key});
 
   @override
-  State<OrderScreen> createState() => _OrderScreenState();
+  State<MenuOrderScreen> createState() => _MenuOrderScreenState();
 }
 
-class _OrderScreenState extends State<OrderScreen> {
-  List<MenuItem> _allMenu = [];
-  bool _isLoading = true;
+class _MenuOrderScreenState extends State<MenuOrderScreen> {
+  final List<MenuItem> menuItems = [
+    MenuItem(name: 'Americano', image: 'assets/americano.png', price: 25000),
+    MenuItem(name: 'Beef Steak', image: 'assets/beef steak.png', price: 75000),
+    MenuItem(
+      name: 'Cheesecake',
+      image: 'assets/cheesecake strawberry.png',
+      price: 30000,
+    ),
+    MenuItem(
+      name: 'Chicken Steak',
+      image: 'assets/chicken steak.png',
+      price: 65000,
+    ),
+    MenuItem(
+      name: 'Ice Cream Matcha',
+      image: 'assets/ice cream matcha.png',
+      price: 20000,
+    ),
+    MenuItem(name: 'Lychee Tea', image: 'assets/lychee tea.png', price: 18000),
+    MenuItem(
+      name: 'Milkshake Chocolate',
+      image: 'assets/milkshake chocolate.png',
+      price: 28000,
+    ),
+    MenuItem(
+      name: 'Mojito Series',
+      image: 'assets/mojito series.png',
+      price: 22000,
+    ),
+    MenuItem(
+      name: 'Parfait Buah',
+      image: 'assets/parfait buah.png',
+      price: 26000,
+    ),
+    MenuItem(name: 'Pizza', image: 'assets/pizza.png', price: 200000),
+    MenuItem(
+      name: 'Pudding Strawberry',
+      image: 'assets/pudding strawberry.png',
+      price: 24000,
+    ),
+    MenuItem(name: 'Spaghetti', image: 'assets/spaghetti.png', price: 50000),
+  ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadMenu();
-  }
+  String rupiah(double value) => 'Rp${value.toStringAsFixed(0)}';
 
-  // Mengambil 12 menu dari database melalui ApiService
-  void _loadMenu() async {
-    final data = await ApiService().getMenu();
-    setState(() {
-      _allMenu = data.map((item) {
-        return MenuItem(
-          id: int.parse(item['id'].toString()),
-          name: item['nama'],
-          desc: item['deskripsi'],
-          img: item['gambar'], // Contoh: 'assets/images/beef_steak.png'
-          price: double.parse(item['harga'].toString()),
-          category: item['kategori'],
-        );
-      }).toList();
-      _isLoading = false;
-    });
-  }
-
-  // Hitung total harga
-  double get _totalPrice => _allMenu.fold(0, (sum, item) => sum + (item.price * item.qty));
-  // Hitung total item dipesan
-  int get _totalItems => _allMenu.fold(0, (sum, item) => sum + item.qty);
+  double get total =>
+      menuItems.fold(0, (sum, item) => sum + item.price * item.qty);
 
   @override
   Widget build(BuildContext context) {
-    // Mengelompokkan menu berdasarkan kategori untuk tampilan section
-    Map<String, List<MenuItem>> groupedMenu = {};
-    for (var item in _allMenu) {
-      groupedMenu.putIfAbsent(item.category, () => []).add(item);
-    }
-
     return Scaffold(
-      backgroundColor: AppColors.accent, // Latar belakang Cream [cite: 45]
       appBar: AppBar(
-        title: Text("Pesan Meja ${widget.tableNumber}"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Menu Order'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : Stack(
-              children: [
-                ListView(
-                  padding: const EdgeInsets.only(bottom: 100, top: 10),
-                  children: groupedMenu.keys.map((category) {
-                    return Column(
-                      children: [
-                        // Header Kategori (Makanan Utama, Minuman, dll)
-                        _buildCategoryHeader(category),
-                        // Daftar Item dalam kategori tersebut
-                        ...groupedMenu[category]!.map((item) => _buildMenuCard(item)),
-                      ],
-                    );
-                  }).toList(),
-                ),
-                // Tombol Konfirmasi Order (Muncul jika ada item yang dipilih)
-                if (_totalItems > 0) _buildBottomCart(),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildCategoryHeader(String title) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 15),
-      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.primary, // Maroon [cite: 47]
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, letterSpacing: 2),
-      ),
-    );
-  }
-
-  Widget _buildMenuCard(MenuItem item) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.primary, // Card Maroon [cite: 55]
-        borderRadius: BorderRadius.circular(50), // Sudut sangat melengkung sesuai gambar
-      ),
-      child: Row(
+      body: Column(
         children: [
-          // Gambar Menu Bulat
-          CircleAvatar(
-            radius: 35,
-            backgroundColor: Colors.white24,
-            backgroundImage: AssetImage(item.img),
-          ),
-          const SizedBox(width: 15),
-          // Detail Menu
+          // ================= GRID MENU =================
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                Text(
-                  item.desc,
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  "Rp ${item.price.toStringAsFixed(0)}",
-                  style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          // Kontrol Quantity (Plus/Minus)
-          _buildQtyControl(item),
-        ],
-      ),
-    );
-  }
+            child: GridView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: menuItems.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.85, // CARD LEBIH PENDEK
+              ),
+              itemBuilder: (context, index) {
+                final item = menuItems[index];
 
-  Widget _buildQtyControl(MenuItem item) {
-    return Row(
-      children: [
-        if (item.qty > 0) ...[
-          IconButton(
-            onPressed: () => setState(() => item.qty--),
-            icon: const Icon(Icons.remove_circle_outline, color: AppColors.accent, size: 28),
-          ),
-          Text(
-            "${item.qty}",
-            style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-        ],
-        IconButton(
-          onPressed: () => setState(() => item.qty++),
-          icon: const Icon(Icons.add_circle, color: AppColors.accent, size: 32),
-        ),
-      ],
-    );
-  }
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFBF4EF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      // ================= GAMBAR FIX =================
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(14),
+                        ),
+                        child: SizedBox(
+                          height: 110, // <<<<<< KUNCI UTAMA
+                          width: double.infinity,
+                          child: Image.asset(
+                            item.image,
+                            fit: BoxFit.contain, // AMAN
+                          ),
+                        ),
+                      ),
 
-  Widget _buildBottomCart() {
-    return Positioned(
-      bottom: 0, left: 0, right: 0,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("$_totalItems Item terpilih", style: const TextStyle(color: Colors.white70)),
-                Text(
-                  "Total: Rp ${_totalPrice.toStringAsFixed(0)}",
-                  style: const TextStyle(color: AppColors.accent, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            ElevatedButton(
-              onPressed: () {
-                // Kirim data item yang dipesan ke halaman pembayaran
-                List<MenuItem> orderedItems = _allMenu.where((i) => i.qty > 0).toList();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PaymentScreen(
-                      tableNumber: widget.tableNumber,
-                      totalTagihan: _totalPrice,
-                    ),
+                      const SizedBox(height: 6),
+
+                      Text(
+                        item.name,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+
+                      Text(rupiah(item.price)),
+
+                      const SizedBox(height: 4),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: item.qty > 0
+                                ? () => setState(() => item.qty--)
+                                : null,
+                          ),
+                          Text(item.qty.toString()),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: () => setState(() => item.qty++),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              ),
-              child: const Text("LANJUT BAYAR", style: TextStyle(fontWeight: FontWeight.bold)),
-            )
-          ],
-        ),
+            ),
+          ),
+
+          // ================= TOTAL =================
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: const Color(0xFFFBF4EF),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'TOTAL',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  rupiah(total),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
