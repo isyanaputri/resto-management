@@ -13,7 +13,7 @@ Restora adalah aplikasi mobile manajemen restoran yang dirancang untuk memudahka
 - **Digital Menu**: Kategori menu, detail menu, manajemen stok, dan fitur add to order.
 - **Reservation**: Reservasi meja dengan pemilihan tanggal, jam, dan jumlah orang.
 - **Order Management**: Manajemen keranjang pesanan untuk layanan dine-in maupun takeaway.
-- **Payment System**: Integrasi pembayaran melalui QRIS, e-wallet, kartu, dan cash.
+- **Payment System**: Integrasi pembayaran melalui QRIS dan cash.
 - **Table Management**: Monitoring status meja (Kosong, Terisi, Reserved, Cleaning).
 - **Dashboard & Analysis**: Laporan penjualan, menu terlaris, jam ramai, dan statistik pembayaran.
 
