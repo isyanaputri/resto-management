@@ -14,7 +14,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Berpindah ke halaman Login setelah 3 detik secara otomatis
+
     Timer(const Duration(seconds: 3), () {
       Navigator.pushReplacement(
         context,
@@ -26,13 +26,13 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Menggunakan warna Maroon sebagai latar belakang utama
+  
       backgroundColor: AppColors.primary, 
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Container untuk Logo agar terlihat lebih rapi
+   
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -40,9 +40,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 border: Border.all(color: AppColors.accent, width: 2),
               ),
               child: Image.asset(
-                'assets/images/logo.png', // Pastikan file ini ada di folder assets
+                'assets/images/logo.png', 
                 width: 120,
-                // Fallback jika gambar logo belum tersedia, menggunakan Icon Restaurant
+     
                 errorBuilder: (context, error, stackTrace) {
                   return const Icon(
                     Icons.restaurant_menu, 
@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            // Nama Aplikasi dengan styling elegan
+
             const Text(
               "RESTORA",
               style: TextStyle(

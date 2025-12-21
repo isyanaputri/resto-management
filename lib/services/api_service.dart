@@ -2,37 +2,56 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Gunakan localhost jika dijalankan di Chrome
-  // Jika pakai Emulator Android, ganti dengan IP Laptop (misal: 10.0.2.2)
-  static const String baseUrl = "http://localhost/restomanagement/php";//cite: 82]
+  // Pastikan IP Address ini sesuai dengan laptop kamu (ipconfig)
+  // Jangan pakai localhost jika dijalankan di Emulator HP/HP Fisik, gunakan IP LAN (contoh: 192.168.1.X)
+  static const String baseUrl = "http://localhost/restomanagement/php"; 
 
-  // 1. Fitur Login (Owner & Staff)
-  Future<Map<String, dynamic>> login(String username, String password) async {//cite: 83]
+  // 1. Login Existing
+  Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/login.php"),
         body: {'username': username, 'password': password},
-      ); //[cite: 83]
-      return json.decode(response.body);// [cite: 84]
+      );
+      return json.decode(response.body); 
     } catch (e) {
-      return {"status": "error", "message": "Koneksi ke server gagal: $e"}; //[cite: 85]
+      return {"status": "error", "message": "Koneksi ke server gagal: $e"};
     }
   }
 
-  // 2. Ambil Data Meja (Real-time Status)
-  Future<List<dynamic>> getTables() async {// [cite: 85]
+  // 2. Update User (BARU DITAMBAHKAN)
+  Future<Map<String, dynamic>> updateUser(
+      String oldUser, String oldPass, String newUser, String newPass) async {
     try {
-      final response = await http.get(Uri.parse("$baseUrl/get_tables.php")); //[cite: 85]
-      if (response.statusCode == 200) {// [cite: 86]
-        return json.decode(response.body);// [cite: 86]
-      }
-      return [];// [cite: 87]
+      final response = await http.post(
+        Uri.parse("$baseUrl/update_user.php"),
+        body: {
+          'old_username': oldUser,
+          'old_password': oldPass,
+          'new_username': newUser,
+          'new_password': newPass,
+        },
+      );
+      return json.decode(response.body);
     } catch (e) {
-      return [];// [cite: 88]
+      return {"status": "error", "message": "Gagal update data: $e"};
     }
   }
 
-  // 3. Ambil Data Menu (12 Item dari Database)
+  // 3. Get Tables
+  Future<List<dynamic>> getTables() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/get_tables.php"));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 4. Get Menu
   Future<List<dynamic>> getMenu() async {
     try {
       final response = await http.get(Uri.parse("$baseUrl/get_menu.php"));
@@ -45,25 +64,25 @@ class ApiService {
     }
   }
 
-  // 4. Kirim Data Reservasi & Update Status Meja
+  // 5. Reservasi
   Future<Map<String, dynamic>> sendReservation(
-      String name, String date, String tableNo) async {// [cite: 88]
+      String name, String date, String tableNo) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/reservasi.php"),
         body: {
           'name': name,
           'date': date,
-          'table_no': tableNo,// [cite: 89]
+          'table_no': tableNo,
         },
-      );// [cite: 89]
-      return json.decode(response.body);// [cite: 90]
+      );
+      return json.decode(response.body);
     } catch (e) {
-      return {"status": "error", "message": "Gagal reservasi: $e"};// [cite: 91]
+      return {"status": "error", "message": "Gagal reservasi: $e"};
     }
   }
 
-  // 5. Simpan Order & Proses Pembayaran (Cash/Barcode)
+  // 6. Simpan Order
   Future<Map<String, dynamic>> saveOrder(
       String tableNo, double total, String method, List items) async {
     try {
@@ -73,7 +92,7 @@ class ApiService {
           'table_no': tableNo,
           'total': total.toString(),
           'method': method,
-          'items': jsonEncode(items), // Mengirim detail item yang dipesan
+          'items': jsonEncode(items),
         },
       );
       return json.decode(response.body);
@@ -82,7 +101,7 @@ class ApiService {
     }
   }
 
-  // 6. Ambil Data Analisis (Khusus Boss)
+  // 7. Get Analisis
   Future<Map<String, dynamic>> getAnalysisData() async {
     try {
       final response = await http.get(Uri.parse("$baseUrl/get_analisis.php"));

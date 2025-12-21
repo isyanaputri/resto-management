@@ -1,25 +1,26 @@
 <?php
 include 'config.php';
 
-// Menangkap data yang dikirim dari Flutter melalui body request
-$username = $_POST['username']; //[cite: 83, 98]
-$password = $_POST['password']; //[cite: 83, 98]
+// [PERUBAHAN]: Menangkap input username & password
+$username = $_POST['username'];
+$password = $_POST['password'];
 
-// Query untuk mencari user berdasarkan username dan password
-$q = mysqli_query($connect, "SELECT * FROM users WHERE username='$username' AND password='$password'");// [cite: 98]
-$row = mysqli_fetch_assoc($q);// [cite: 98]
+// [PERUBAHAN]: Query ke tabel 'users' yang baru dibuat
+$q = mysqli_query($connect, "SELECT * FROM users WHERE username='$username' AND password='$password'");
+$row = mysqli_fetch_assoc($q);
 
 if ($row) {
-    // Jika data ditemukan, kirim status sukses dan role (owner/staff)
+    // Login Sukses
     echo json_encode([
         'status' => 'success', 
-        'role' => $row['role']
-    ]);// [cite: 99]
+        'role' => $row['role'],
+        'user_id' => $row['id'] // Tambahan: berguna jika nanti butuh ID kasir
+    ]);
 } else {
-    // Jika tidak ditemukan, kirim pesan error
+    // Login Gagal
     echo json_encode([
         'status' => 'error', 
         'message' => 'Username atau Password Salah!'
-    ]);// [cite: 100]
+    ]);
 }
 ?>
