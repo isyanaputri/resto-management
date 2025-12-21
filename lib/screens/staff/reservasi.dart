@@ -4,7 +4,6 @@ import '../../services/api_service.dart';
 
 class ReservasiScreen extends StatefulWidget {
   const ReservasiScreen({super.key});
-
   @override
   State<ReservasiScreen> createState() => _ReservasiScreenState();
 }
@@ -16,14 +15,35 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
   
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-  String? _selectedTable;
+  
+  String? _selectedTable; // Menyimpan nomor meja yang dipilih
+  List<String> _availableTables = []; // List meja kosong dari database
+  
   int _peopleCount = 1;
   bool _isLoading = false;
+  bool _isFetchingTables = true;
 
-  // Daftar nomor meja (Idealnya ambil dari API getTables yang statusnya 'kosong')
-  final List<String> _availableTables = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
+  @override
+  void initState() {
+    super.initState();
+    _fetchEmptyTables();
+  }
 
-  // Fungsi memunculkan pemilih tanggal
+  // Fungsi Baru: Ambil Meja yang Statusnya 'kosong' saja
+  void _fetchEmptyTables() async {
+    final allTables = await ApiService().getTables();
+    if (!mounted) return;
+    
+    setState(() {
+      // Filter hanya meja yang statusnya 'kosong'
+      _availableTables = allTables
+          .where((t) => t['status'] == 'kosong')
+          .map<String>((t) => t['nomor_meja'].toString())
+          .toList();
+      _isFetchingTables = false;
+    });
+  }
+
   Future<void> _pickDate() async {
     DateTime? picked = await showDatePicker(
       context: context,
@@ -42,7 +62,6 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  // Fungsi memunculkan pemilih waktu
   Future<void> _pickTime() async {
     TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -51,45 +70,51 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // Kirim data ke database 
   void _submitReservasi() async {
-    if (_nameCtrl.text.isEmpty || _selectedDate == null || _selectedTime == null || _selectedTable == null) {
+    if (_nameCtrl.text.isEmpty || 
+        _phoneCtrl.text.isEmpty ||
+        _selectedDate == null || 
+        _selectedTime == null || 
+        _selectedTable == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lengkapi semua data reservasi!")),
+        const SnackBar(content: Text("Mohon lengkapi semua data utama!")),
       );
-      return;//cite: 62]
+      return;
     }
 
     setState(() => _isLoading = true);
-
+    
     // Format tanggal & waktu untuk MySQL (YYYY-MM-DD HH:MM:SS)
     String formattedDate = "${_selectedDate!.year}-${_selectedDate!.month}-${_selectedDate!.day} ${_selectedTime!.hour}:${_selectedTime!.minute}:00";
-
+    
     final result = await ApiService().sendReservation(
       _nameCtrl.text,
+      _phoneCtrl.text,
       formattedDate,
+      _peopleCount.toString(),
       _selectedTable!,
+      _noteCtrl.text,
     );
-
+    
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result['status'] == 'success') {//cite: 63]
+    if (result['status'] == 'success') {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Berhasil Reservasi! Meja ditandai dipesan."), backgroundColor: Colors.green),
+        SnackBar(content: Text(result['message']), backgroundColor: Colors.green),
       );
-      Navigator.pop(context);//cite: 63]
+      Navigator.pop(context); // Kembali ke Home agar refresh status meja
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Gagal: ${result['message']}"), backgroundColor: Colors.red),
-      );//cite: 64]
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.accent,//cite: 1]
+      backgroundColor: AppColors.accent,
       appBar: AppBar(title: const Text("RESERVASI MEJA")),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(25),
@@ -104,7 +129,7 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
             _buildSectionTitle("Waktu & Kapasitas"),
             Row(
               children: [
-                Expanded(child: _buildPickerTile("Tanggal", _selectedDate == null ? "Pilih" : "${_selectedDate!.day}/${_selectedDate!.month}", Icons.calendar_today, _pickDate)),
+                Expanded(child: _buildPickerTile("Tanggal", _selectedDate == null ? "Pilih" : "${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}", Icons.calendar_today, _pickDate)),
                 const SizedBox(width: 15),
                 Expanded(child: _buildPickerTile("Jam", _selectedTime == null ? "Pilih" : _selectedTime!.format(context), Icons.access_time, _pickTime)),
               ],
@@ -114,8 +139,10 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
             _buildPeopleCounter(),
             
             const SizedBox(height: 20),
-            _buildSectionTitle("Pilih Meja"),
-            _buildTableDropdown(),
+            _buildSectionTitle("Pilih Meja (Hanya Meja Kosong)"),
+            _isFetchingTables 
+                ? const LinearProgressIndicator(color: AppColors.primary)
+                : _buildTableDropdown(),
             
             const SizedBox(height: 20),
             _buildSectionTitle("Catatan Tambahan (Opsional)"),
@@ -156,6 +183,7 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
         controller: ctrl,
         keyboardType: inputType,
         maxLines: maxLines,
+        style: const TextStyle(color: AppColors.primary),
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: AppColors.primary),
           hintText: label,
@@ -200,9 +228,9 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
           const Text("Jumlah Orang", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           Row(
             children: [
-              IconButton(onPressed: () => setState(() => _peopleCount > 1 ? _peopleCount-- : null), icon: const Icon(Icons.remove_circle_outline)),
-              Text("$_peopleCount", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              IconButton(onPressed: () => setState(() => _peopleCount++), icon: const Icon(Icons.add_circle_outline)),
+              IconButton(onPressed: () => setState(() => _peopleCount > 1 ? _peopleCount-- : null), icon: const Icon(Icons.remove_circle_outline, color: AppColors.primary)),
+              Text("$_peopleCount", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+              IconButton(onPressed: () => setState(() => _peopleCount++), icon: const Icon(Icons.add_circle_outline, color: AppColors.primary)),
             ],
           )
         ],
@@ -211,6 +239,15 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
   }
 
   Widget _buildTableDropdown() {
+    if (_availableTables.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(15),
+        width: double.infinity,
+        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(15)),
+        child: const Text("Tidak ada meja kosong saat ini.", style: TextStyle(color: Colors.red)),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
@@ -219,7 +256,11 @@ class _ReservasiScreenState extends State<ReservasiScreen> {
           value: _selectedTable,
           hint: const Text("Pilih Nomor Meja"),
           isExpanded: true,
-          items: _availableTables.map((t) => DropdownMenuItem(value: t, child: Text("Meja $t"))).toList(),
+          icon: const Icon(Icons.arrow_drop_down, color: AppColors.primary),
+          items: _availableTables.map((t) => DropdownMenuItem(
+            value: t, 
+            child: Text("Meja $t", style: const TextStyle(color: AppColors.primary))
+          )).toList(),
           onChanged: (val) => setState(() => _selectedTable = val),
         ),
       ),

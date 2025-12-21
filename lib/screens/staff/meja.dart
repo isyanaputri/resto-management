@@ -20,10 +20,10 @@ class _MejaScreenState extends State<MejaScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchTables(); // Ambil data saat layar dibuka [cite: 19]
+    _fetchTables();
   }
 
-  // Fungsi untuk sinkronisasi dengan database MySQL
+  // Ambil data meja dari database (Refresh)
   void _fetchTables() async {
     setState(() => _isLoading = true);
     final data = await ApiService().getTables();
@@ -36,40 +36,43 @@ class _MejaScreenState extends State<MejaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.accent, // Background Cream
+      backgroundColor: AppColors.accent,
       appBar: AppBar(
         title: const Text("RESTORA MAP", style: TextStyle(letterSpacing: 2)),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTables),//cite: 22]
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTables),
           IconButton(
             icon: const Icon(Icons.calendar_month),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservasiScreen())),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservasiScreen())).then((_) => _fetchTables()),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),//cite: 23]
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
           ),
         ],
       ),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))//cite: 24]
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : Column(
               children: [
-                _buildLegend(), // Indikator Status [cite: 25]
+                _buildLegend(),
                 Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(20),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, 
-                      crossAxisSpacing: 15, 
-                      mainAxisSpacing: 15, 
-                      childAspectRatio: 1.3,//cite: 27]
+                  child: RefreshIndicator(
+                    onRefresh: () async => _fetchTables(),
+                    child: GridView.builder(
+                      padding: const EdgeInsets.all(20),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 15,
+                        mainAxisSpacing: 15,
+                        childAspectRatio: 1.3,
+                      ),
+                      itemCount: _tables.length,
+                      itemBuilder: (context, index) {
+                        final table = _tables[index];
+                        return _buildTableCard(table);
+                      },
                     ),
-                    itemCount: _tables.length,
-                    itemBuilder: (context, index) {
-                      final table = _tables[index];
-                      return _buildTableCard(table);//cite: 29]
-                    },
                   ),
                 ),
               ],
@@ -77,7 +80,6 @@ class _MejaScreenState extends State<MejaScreen> {
     );
   }
 
-  // Widget Legenda Status Meja
   Widget _buildLegend() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 15),
@@ -85,9 +87,9 @@ class _MejaScreenState extends State<MejaScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _legendItem("Kosong", Colors.transparent, AppColors.primary),//cite: 31, 33]
-          _legendItem("Terisi", AppColors.primary, AppColors.accent),//cite: 34]
-          _legendItem("Dipesan", Colors.orangeAccent, Colors.white),//cite: 3, 35]
+          _legendItem("Kosong", Colors.transparent, AppColors.primary),
+          _legendItem("Terisi", AppColors.primary, AppColors.accent),
+          _legendItem("Dipesan", AppColors.reserved, Colors.white),
         ],
       ),
     );
@@ -97,46 +99,51 @@ class _MejaScreenState extends State<MejaScreen> {
     return Row(
       children: [
         Container(
-          width: 15, height: 15, 
+          width: 15,
+          height: 15,
           decoration: BoxDecoration(
-            color: bg, 
-            shape: BoxShape.circle, 
-            border: Border.all(color: AppColors.primary)
-          ),
+              color: bg,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary)),
         ),
         const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+        Text(label,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, color: AppColors.primary)),
       ],
     );
   }
 
-  // Card Meja dengan Logika Navigasi
   Widget _buildTableCard(dynamic table) {
     String no = table['nomor_meja'];
-    String status = table['status']; // 'kosong', 'terisi', 'dipesan' [cite: 29]
+    String status = table['status']; // 'kosong', 'terisi', 'dipesan'
     String kapasitas = table['kapasitas'].toString();
 
     Color bgColor = Colors.transparent;
     Color txtColor = AppColors.primary;
-    BoxBorder? border = Border.all(color: AppColors.primary, width: 2);//cite: 36]
+    BoxBorder? border = Border.all(color: AppColors.primary, width: 2);
 
     if (status == 'terisi') {
-      bgColor = AppColors.primary;//cite: 34]
+      bgColor = AppColors.primary;
       txtColor = AppColors.accent;
       border = null;
     } else if (status == 'dipesan') {
-      bgColor = Colors.orangeAccent;//cite: 35]
+      bgColor = AppColors.reserved; // Kuning Emas
       txtColor = Colors.white;
       border = null;
     }
 
     return InkWell(
       onTap: () {
-        // LOGIKA: Jika kosong ke Order, jika terisi/dipesan ke Detail Meja
         if (status == 'kosong') {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => OrderScreen(tableNumber: no))); //ite: 35]
+          // JIKA KOSONG: Tampilkan Pilihan (Info / Order)
+          _showEmptyTableOptions(context, table);
         } else {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => DetailMeja(tableData: table)));
+          // JIKA TERISI/DIPESAN: Langsung ke Detail Meja
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DetailMeja(tableData: table)),
+          ).then((_) => _fetchTables()); // Refresh saat kembali
         }
       },
       child: Container(
@@ -148,19 +155,70 @@ class _MejaScreenState extends State<MejaScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(no, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: txtColor)), //ite: 36]
-            Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: txtColor)),
+            Text(no,
+                style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: txtColor)),
+            Text(status.toUpperCase(),
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: txtColor)),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.people, size: 16, color: txtColor),
                 const SizedBox(width: 5),
-                Text(kapasitas, style: TextStyle(color: txtColor, fontWeight: FontWeight.bold)),//cite: 37]
+                Text(kapasitas,
+                    style: TextStyle(color: txtColor, fontWeight: FontWeight.bold)),
               ],
             )
           ],
         ),
+      ),
+    );
+  }
+
+  // --- LOGIKA BARU: Dialog Pilihan untuk Meja Kosong ---
+  void _showEmptyTableOptions(BuildContext context, dynamic tableData) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.accent,
+        title: Text("Meja ${tableData['nomor_meja']} (KOSONG)", 
+          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+        content: const Text("Silakan pilih tindakan untuk meja ini."),
+        actions: [
+          // Opsi 1: Lihat Informasi Meja
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.primary),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx); // Tutup dialog
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => DetailMeja(tableData: tableData)),
+              );
+            },
+            child: const Text("LIHAT INFO", style: TextStyle(color: AppColors.primary)),
+          ),
+          
+          // Opsi 2: Order Menu
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.pop(ctx); // Tutup dialog
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => OrderScreen(tableNumber: tableData['nomor_meja'])),
+              ).then((_) => _fetchTables());
+            },
+            child: const Text("ORDER MENU", style: TextStyle(color: AppColors.accent)),
+          ),
+        ],
       ),
     );
   }

@@ -2,24 +2,32 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Pastikan IP Address ini sesuai dengan laptop kamu (ipconfig)
-  // Jangan pakai localhost jika dijalankan di Emulator HP/HP Fisik, gunakan IP LAN (contoh: 192.168.1.X)
+  
+  // PENTING:
+  // Gunakan '10.0.2.2' jika menggunakan Emulator Android Studio.
+  // Gunakan IP Address Laptop (contoh: '192.168.1.X') jika menggunakan HP Fisik / Device Asli.
+  // Jangan pakai 'localhost' kecuali di Web Browser.
   static const String baseUrl = "http://localhost/restomanagement/php"; 
 
-  // 1. Login Existing
+  // ===========================================================================
+  // 1. AUTHENTICATION (LOGIN & UPDATE USER)
+  // ===========================================================================
+
+  // Login User
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/login.php"),
         body: {'username': username, 'password': password},
       );
+      // Decode response dari server
       return json.decode(response.body); 
     } catch (e) {
       return {"status": "error", "message": "Koneksi ke server gagal: $e"};
     }
   }
 
-  // 2. Update User (BARU DITAMBAHKAN)
+  // Update Username & Password (Fitur Baru Tahap 1)
   Future<Map<String, dynamic>> updateUser(
       String oldUser, String oldPass, String newUser, String newPass) async {
     try {
@@ -38,7 +46,11 @@ class ApiService {
     }
   }
 
-  // 3. Get Tables
+  // ===========================================================================
+  // 2. TABLE MANAGEMENT (MEJA)
+  // ===========================================================================
+
+  // Mengambil Data Semua Meja
   Future<List<dynamic>> getTables() async {
     try {
       final response = await http.get(Uri.parse("$baseUrl/get_tables.php"));
@@ -47,11 +59,29 @@ class ApiService {
       }
       return [];
     } catch (e) {
+      // Kembalikan list kosong jika error agar aplikasi tidak crash
       return [];
     }
   }
 
-  // 4. Get Menu
+  // Membatalkan/Mengosongkan Meja (Fitur Baru Tahap 2)
+  Future<Map<String, dynamic>> cancelTable(String tableNo) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/cancel_table.php"),
+        body: {'table_no': tableNo},
+      );
+      return json.decode(response.body);
+    } catch (e) {
+      return {"status": "error", "message": "Gagal membatalkan status meja: $e"};
+    }
+  }
+
+  // ===========================================================================
+  // 3. MENU & RESERVATION
+  // ===========================================================================
+
+  // Mengambil Daftar Menu Makanan/Minuman
   Future<List<dynamic>> getMenu() async {
     try {
       final response = await http.get(Uri.parse("$baseUrl/get_menu.php"));
@@ -64,25 +94,32 @@ class ApiService {
     }
   }
 
-  // 5. Reservasi
+  // Mengirim Data Reservasi (Diupdate Tahap 3: Tambah phone, people, notes)
   Future<Map<String, dynamic>> sendReservation(
-      String name, String date, String tableNo) async {
+      String name, String phone, String date, String people, String tableNo, String notes) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/reservasi.php"),
         body: {
           'name': name,
+          'phone': phone,
           'date': date,
+          'people': people,
           'table_no': tableNo,
+          'notes': notes,
         },
       );
       return json.decode(response.body);
     } catch (e) {
-      return {"status": "error", "message": "Gagal reservasi: $e"};
+      return {"status": "error", "message": "Gagal melakukan reservasi: $e"};
     }
   }
 
-  // 6. Simpan Order
+  // ===========================================================================
+  // 4. TRANSACTION & ORDER
+  // ===========================================================================
+
+  // Simpan Order (Checkout)
   Future<Map<String, dynamic>> saveOrder(
       String tableNo, double total, String method, List items) async {
     try {
@@ -92,16 +129,20 @@ class ApiService {
           'table_no': tableNo,
           'total': total.toString(),
           'method': method,
-          'items': jsonEncode(items),
+          'items': jsonEncode(items), // Item dikirim sebagai JSON String
         },
       );
       return json.decode(response.body);
     } catch (e) {
-      return {"status": "error", "message": "Gagal memproses pembayaran"};
+      return {"status": "error", "message": "Gagal memproses pembayaran: $e"};
     }
   }
 
-  // 7. Get Analisis
+  // ===========================================================================
+  // 5. ANALYSIS (DASHBOARD OWNER)
+  // ===========================================================================
+
+  // Ambil Data Analisis Penjualan
   Future<Map<String, dynamic>> getAnalysisData() async {
     try {
       final response = await http.get(Uri.parse("$baseUrl/get_analisis.php"));
