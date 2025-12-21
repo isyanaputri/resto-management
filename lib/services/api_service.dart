@@ -5,7 +5,7 @@ class ApiService {
   
   // PENTING:
   // Gunakan '10.0.2.2' jika menggunakan Emulator Android Studio.
-  // Gunakan IP Address Laptop (contoh: '192.168.1.X') jika menggunakan HP Fisik / Device Asli.
+  // Gunakan IP Address Laptop (contoh: '192.168.1.X') jika menggunakan HP Fisik.
   // Jangan pakai 'localhost' kecuali di Web Browser.
   static const String baseUrl = "http://localhost/restomanagement/php"; 
 
@@ -116,10 +116,30 @@ class ApiService {
   }
 
   // ===========================================================================
-  // 4. TRANSACTION & ORDER
+  // 4. ORDER & TRANSACTION PROCESSING
   // ===========================================================================
 
-  // Simpan Order (Checkout)
+  // FUNGSI BARU (Tahap 4): Input Pesanan Awal (Ubah status meja jadi Terisi & Catat Menu)
+  // Digunakan saat tombol "KONFIRMASI PESANAN" ditekan di OrderScreen
+  Future<Map<String, dynamic>> inputOrder(
+      String tableNo, double total, List items) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/input_order.php"),
+        body: {
+          'table_no': tableNo,
+          'total': total.toString(),
+          'items': jsonEncode(items), // Kirim list menu sebagai JSON
+        },
+      );
+      return json.decode(response.body);
+    } catch (e) {
+      return {"status": "error", "message": "Gagal input order: $e"};
+    }
+  }
+
+  // Simpan Transaksi Akhir / Pembayaran (Akan digunakan di Tahap 5)
+  // Digunakan saat tombol "SELESAIKAN PEMBAYARAN" ditekan di PaymentScreen
   Future<Map<String, dynamic>> saveOrder(
       String tableNo, double total, String method, List items) async {
     try {
@@ -129,7 +149,7 @@ class ApiService {
           'table_no': tableNo,
           'total': total.toString(),
           'method': method,
-          'items': jsonEncode(items), // Item dikirim sebagai JSON String
+          'items': jsonEncode(items), 
         },
       );
       return json.decode(response.body);

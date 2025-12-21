@@ -15,39 +15,70 @@ class DetailMeja extends StatefulWidget {
 
 class _DetailMejaState extends State<DetailMeja> {
   late String status;
-  
+
   @override
   void initState() {
     super.initState();
     status = widget.tableData['status'] ?? "kosong";
   }
 
+  // Fungsi Helper: Mengambil angka total dari teks keterangan (misal: "Est. Tagihan: Rp 50.000")
+  double _parseTotalBill(String info) {
+    try {
+      if (info.contains("Est. Tagihan: Rp")) {
+        // Ambil teks setelah "Rp "
+        String raw = info.split("Rp")[1]; 
+        // Bersihkan titik ribuan dan spasi (misal " 50.000" jadi "50000")
+        String clean = raw.replaceAll(".", "").replaceAll(",", "").trim();
+        
+        // Ambil angka pertama yang ditemukan
+        RegExp regex = RegExp(r'(\d+)');
+        var match = regex.firstMatch(clean);
+        if (match != null) {
+          return double.parse(match.group(0)!);
+        }
+      }
+    } catch (e) {
+      return 0.0;
+    }
+    return 0.0;
+  }
+
   // Fungsi untuk Membatalkan Status Meja (Kosongkan Paksa)
   void _cancelTable() async {
     bool confirm = await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Konfirmasi Pembatalan"),
-        content: const Text("Yakin ingin membatalkan/mengosongkan meja ini? Data order aktif mungkin akan hilang."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("TIDAK")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("YA, BATALKAN", style: TextStyle(color: Colors.white)),
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Konfirmasi Pembatalan"),
+            content: const Text(
+                "Yakin ingin membatalkan/mengosongkan meja ini? Data order aktif akan dihapus."),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("TIDAK")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("YA, BATALKAN",
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
 
     if (confirm) {
-      final res = await ApiService().cancelTable(widget.tableData['nomor_meja']);
+      final res =
+          await ApiService().cancelTable(widget.tableData['nomor_meja']);
       if (!mounted) return;
+      
       if (res['status'] == 'success') {
-        Navigator.pop(context); // Kembali ke peta meja
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Meja berhasil dikosongkan.")));
+        Navigator.pop(context); // Kembali ke peta meja agar refresh
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Meja berhasil dikosongkan.")));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message'])));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(res['message'])));
       }
     }
   }
@@ -56,8 +87,12 @@ class _DetailMejaState extends State<DetailMeja> {
   Widget build(BuildContext context) {
     String noMeja = widget.tableData['nomor_meja'] ?? "-";
     String kapasitas = widget.tableData['kapasitas']?.toString() ?? "0";
-    // Info tambahan (misal nama reservasi) diambil dari kolom keterangan
-    String infoAktivitas = widget.tableData['keterangan'] ?? "Tidak ada catatan aktif.";
+    // Info tambahan (pesanan atau reservasi) diambil dari database
+    String infoAktivitas =
+        widget.tableData['keterangan'] ?? "Tidak ada catatan aktif.";
+
+    // Deteksi otomatis total tagihan dari infoAktivitas
+    double detectedTotal = _parseTotalBill(infoAktivitas);
 
     return Scaffold(
       backgroundColor: AppColors.accent,
@@ -72,23 +107,27 @@ class _DetailMejaState extends State<DetailMeja> {
           children: [
             // 1. Kartu Ringkasan Meja
             _buildSummaryCard(noMeja, status, kapasitas),
-            
+
             const SizedBox(height: 25),
-            
+
             // 2. Judul Informasi
             const Row(
               children: [
                 Icon(Icons.info_outline, color: AppColors.primary),
                 SizedBox(width: 10),
-                Text("Informasi Status",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+                Text(
+                  "Informasi Status",
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary),
                 ),
               ],
             ),
             const Divider(color: AppColors.primary, thickness: 1),
             const SizedBox(height: 10),
-            
-            // 3. Konten Informasi
+
+            // 3. Konten Informasi (Scrollable)
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -103,45 +142,52 @@ class _DetailMejaState extends State<DetailMeja> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        status == 'kosong' ? "Meja ini tersedia untuk pelanggan baru." : infoAktivitas,
-                        style: const TextStyle(fontSize: 16, color: AppColors.primary, height: 1.5),
+                        status == 'kosong'
+                            ? "Meja ini tersedia untuk pelanggan baru."
+                            : infoAktivitas,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            color: AppColors.primary,
+                            height: 1.5),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 20),
+
+            // 4. Tombol Aksi Dinamis Berdasarkan Status
             
-            // 4. Tombol Aksi Berdasarkan Status
+            // KASUS A: MEJA KOSONG
             if (status == 'kosong')
-              // Jika Kosong -> Tombol Order
               _buildActionButton(
                 label: "MULAI ORDER",
                 icon: Icons.add_shopping_cart,
                 color: AppColors.primary,
                 onPressed: () {
-                   Navigator.pushReplacement(
+                  Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => OrderScreen(tableNumber: noMeja)),
+                    MaterialPageRoute(
+                        builder: (_) => OrderScreen(tableNumber: noMeja)),
                   );
                 },
               ),
 
+            // KASUS B: MEJA TERISI (Ada Pesanan)
             if (status == 'terisi') ...[
-              // Jika Terisi -> Tombol Bayar & Cancel
               _buildActionButton(
                 label: "PROSES PEMBAYARAN",
                 icon: Icons.payments_outlined,
-                color: Colors.green, // Hijau agar beda
+                color: Colors.green, // Hijau agar menonjol
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => PaymentScreen(
                         tableNumber: noMeja,
-                        totalTagihan: 0, // Nanti diupdate real di halaman payment
+                        totalTagihan: detectedTotal, // Kirim total otomatis
                       ),
                     ),
                   );
@@ -155,21 +201,23 @@ class _DetailMejaState extends State<DetailMeja> {
               ),
             ],
 
+            // KASUS C: MEJA DIPESAN (Reservasi)
             if (status == 'dipesan') ...[
-               // Jika Reservasi -> Tombol Cancel Reservasi
-               _buildActionButton(
-                label: "CHECK-IN (ORDER)", // Ubah status jadi terisi dengan order
+              _buildActionButton(
+                label: "CHECK-IN (ORDER)", 
                 icon: Icons.edit_note,
                 color: AppColors.primary,
                 onPressed: () {
-                   Navigator.pushReplacement(
+                  // Saat reservasi datang, langsung masuk ke mode order
+                  Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => OrderScreen(tableNumber: noMeja)),
+                    MaterialPageRoute(
+                        builder: (_) => OrderScreen(tableNumber: noMeja)),
                   );
                 },
               ),
-               const SizedBox(height: 10),
-               _buildOutlineButton(
+              const SizedBox(height: 10),
+              _buildOutlineButton(
                 label: "BATALKAN RESERVASI",
                 color: Colors.red,
                 onPressed: _cancelTable,
@@ -181,17 +229,22 @@ class _DetailMejaState extends State<DetailMeja> {
     );
   }
 
+  // Widget: Kartu Ringkasan Atas
   Widget _buildSummaryCard(String no, String status, String cap) {
-    Color statusColor = status == 'terisi' ? AppColors.primary : 
-                        (status == 'dipesan' ? AppColors.reserved : Colors.green);
-    
+    Color statusColor = status == 'terisi'
+        ? AppColors.primary
+        : (status == 'dipesan' ? AppColors.reserved : Colors.green);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))
+          BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5))
         ],
       ),
       child: Row(
@@ -200,25 +253,36 @@ class _DetailMejaState extends State<DetailMeja> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("MEJA", style: TextStyle(color: Colors.white70, fontSize: 14, letterSpacing: 2)),
-              Text(no, style: const TextStyle(color: AppColors.accent, fontSize: 40, fontWeight: FontWeight.bold)),
+              const Text("MEJA",
+                  style: TextStyle(
+                      color: Colors.white70, fontSize: 14, letterSpacing: 2)),
+              Text(no,
+                  style: const TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor == AppColors.primary ? Colors.white : statusColor,
+                  color: statusColor == AppColors.primary
+                      ? Colors.white
+                      : statusColor,
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Text(
                   status.toUpperCase(),
                   style: TextStyle(
-                    color: statusColor == AppColors.primary ? AppColors.primary : Colors.white, 
-                    fontSize: 10, fontWeight: FontWeight.bold
-                  ),
+                      color: statusColor == AppColors.primary
+                          ? AppColors.primary
+                          : Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 12),
@@ -226,7 +290,11 @@ class _DetailMejaState extends State<DetailMeja> {
                 children: [
                   const Icon(Icons.group, color: AppColors.accent, size: 20),
                   const SizedBox(width: 8),
-                  Text("$cap Kursi", style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text("$cap Kursi",
+                      style: const TextStyle(
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ],
               )
             ],
@@ -236,23 +304,35 @@ class _DetailMejaState extends State<DetailMeja> {
     );
   }
 
-  Widget _buildActionButton({required String label, required IconData icon, required Color color, required VoidCallback onPressed}) {
+  // Widget: Tombol Utama (Solid)
+  Widget _buildActionButton(
+      {required String label,
+      required IconData icon,
+      required Color color,
+      required VoidCallback onPressed}) {
     return SizedBox(
       width: double.infinity,
       height: 55,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, color: Colors.white),
-        label: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+        label: Text(label,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
       ),
     );
   }
 
-  Widget _buildOutlineButton({required String label, required Color color, required VoidCallback onPressed}) {
+  // Widget: Tombol Outline (Garis)
+  Widget _buildOutlineButton(
+      {required String label,
+      required Color color,
+      required VoidCallback onPressed}) {
     return SizedBox(
       width: double.infinity,
       height: 50,
@@ -261,7 +341,8 @@ class _DetailMejaState extends State<DetailMeja> {
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: color, width: 2),
           foregroundColor: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
         child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
       ),

@@ -1,58 +1,48 @@
 <?php
 include 'config.php';
 
-// Menangkap data dari Flutter
+// 1. Tangkap Data dari Flutter
 $table_no = $_POST['table_no'];
 $total    = $_POST['total'];
-$method   = $_POST['method']; // 'cash' atau 'barcode'
-// Data items dikirim dalam bentuk JSON string dari Flutter
-$items    = json_decode($_POST['items'], true); 
+$method   = $_POST['method']; // Akan berisi: 'cash', 'qris', 'debit', atau 'credit'
 
-// Menggunakan Transaction agar jika salah satu proses gagal, data tidak berantakan
+// (Opsional) Jika ada item detail, bisa ditangkap di sini, tapi untuk pembayaran final cukup totalnya saja.
+
+// 2. Mulai Transaksi (Penting agar data konsisten)
 mysqli_begin_transaction($connect);
 
 try {
-    // 1. Masukkan data ke tabel 'orders'
+    // A. Masukkan Data ke Tabel Transaksi (orders)
+    // Pastikan nama kolom di database kamu sesuai: nomor_meja, total_harga, metode_bayar
     $queryOrder = "INSERT INTO orders (nomor_meja, total_harga, metode_bayar) 
                    VALUES ('$table_no', '$total', '$method')";
-    mysqli_query($connect, $queryOrder);
     
-    // Ambil ID order yang baru saja dibuat
-    $order_id = mysqli_insert_id($connect);
-
-    // 2. Masukkan rincian item ke tabel 'order_items' (untuk analisis menu terlaris)
-    if (!empty($items)) {
-        foreach ($items as $item) {
-            $nama_menu = $item['name'];
-            $qty       = $item['qty'];
-            $price     = $item['price'];
-            $subtotal  = $qty * $price;
-
-            $queryItems = "INSERT INTO order_items (order_id, nama_menu, qty, subtotal) 
-                           VALUES ('$order_id', '$nama_menu', '$qty', '$subtotal')";
-            mysqli_query($connect, $queryItems);
-        }
+    if (!mysqli_query($connect, $queryOrder)) {
+        throw new Exception("Gagal menyimpan data transaksi ke tabel orders.");
+    }
+    
+    // B. Kosongkan Status Meja (Reset jadi 'kosong' dan hapus keterangan pesanan)
+    $queryClear = "UPDATE tables SET status='kosong', keterangan=NULL WHERE nomor_meja='$table_no'";
+    
+    if (!mysqli_query($connect, $queryClear)) {
+        throw new Exception("Gagal mengupdate status meja.");
     }
 
-    // 3. Update status meja kembali menjadi 'kosong' dan bersihkan keterangan
-    $queryTable = "UPDATE tables SET status='kosong', keterangan='' 
-                   WHERE nomor_meja='$table_no'";
-    mysqli_query($connect, $queryTable);
-
-    // Jika semua berhasil, simpan permanen
+    // Jika A dan B berhasil, simpan permanen (COMMIT)
     mysqli_commit($connect);
-
+    
     echo json_encode([
         "status" => "success", 
-        "message" => "Pembayaran berhasil, meja $table_no telah dikosongkan"
+        "message" => "Pembayaran Berhasil Disimpan!"
     ]);
 
 } catch (Exception $e) {
-    // Jika ada error, batalkan semua perubahan data
+    // Jika ada error, batalkan semua perubahan (ROLLBACK)
     mysqli_rollback($connect);
+    
     echo json_encode([
         "status" => "error", 
-        "message" => "Gagal memproses pesanan: " . $e->getMessage()
+        "message" => "Database Error: " . $e->getMessage()
     ]);
 }
 ?>

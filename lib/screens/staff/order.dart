@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../configurasi/warna.dart';
 import '../../services/api_service.dart';
-import '../payment/payment.dart';
+// Note: Kita tidak import PaymentScreen lagi di sini karena alurnya: Order -> Simpan -> Balik ke Map
 
-// Model untuk item menu
+// Model Menu Item
 class MenuItem {
   final int id;
   final String name, desc, img, category;
@@ -32,6 +32,7 @@ class OrderScreen extends StatefulWidget {
 class _OrderScreenState extends State<OrderScreen> {
   List<MenuItem> _allMenu = [];
   bool _isLoading = true;
+  bool _isSending = false; // Loading saat tekan tombol pesan
 
   @override
   void initState() {
@@ -39,7 +40,6 @@ class _OrderScreenState extends State<OrderScreen> {
     _loadMenu();
   }
 
-  // Mengambil 12 menu dari database melalui ApiService
   void _loadMenu() async {
     final data = await ApiService().getMenu();
     setState(() {
@@ -48,7 +48,7 @@ class _OrderScreenState extends State<OrderScreen> {
           id: int.parse(item['id'].toString()),
           name: item['nama'],
           desc: item['deskripsi'],
-          img: item['gambar'], // Contoh: 'assets/images/beef_steak.png'
+          img: item['gambar'],
           price: double.parse(item['harga'].toString()),
           category: item['kategori'],
         );
@@ -57,21 +57,70 @@ class _OrderScreenState extends State<OrderScreen> {
     });
   }
 
-  // Hitung total harga
+  // Hitung Total
   double get _totalPrice => _allMenu.fold(0, (sum, item) => sum + (item.price * item.qty));
-  // Hitung total item dipesan
   int get _totalItems => _allMenu.fold(0, (sum, item) => sum + item.qty);
+
+  // FUNGSI BARU: Kirim Pesanan ke Database
+  void _submitOrder() async {
+    setState(() => _isSending = true);
+
+    // 1. Ambil item yang qty > 0
+    List<Map<String, dynamic>> itemsToSend = _allMenu
+        .where((i) => i.qty > 0)
+        .map((i) => {
+              "id": i.id, // Pastikan ID dikirim (meski belum dipakai php, bagus untuk debug)
+              "name": i.name,
+              "price": i.price,
+              "qty": i.qty,
+              "subtotal": i.price * i.qty
+            })
+        .toList();
+
+    // Cek jika kosong
+    if (itemsToSend.isEmpty) {
+      setState(() => _isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pilih minimal 1 menu!")),
+      );
+      return;
+    }
+
+    // 2. Panggil API
+    final result = await ApiService().inputOrder(
+      widget.tableNumber, 
+      _totalPrice, 
+      itemsToSend
+    );
+
+    if (!mounted) return;
+    setState(() => _isSending = false);
+
+    // 3. Cek Hasil
+    if (result['status'] == 'success') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pesanan Masuk!"), backgroundColor: Colors.green),
+      );
+      // Kembali ke halaman Map Meja
+      Navigator.pop(context); 
+    } else {
+      // Tampilkan error spesifik dari PHP
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Gagal: ${result['message']}"), backgroundColor: Colors.red),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Mengelompokkan menu berdasarkan kategori untuk tampilan section
+    // Grouping Menu per Kategori
     Map<String, List<MenuItem>> groupedMenu = {};
     for (var item in _allMenu) {
       groupedMenu.putIfAbsent(item.category, () => []).add(item);
     }
 
     return Scaffold(
-      backgroundColor: AppColors.accent, // Latar belakang Cream [cite: 45]
+      backgroundColor: AppColors.accent,
       appBar: AppBar(
         title: Text("Pesan Meja ${widget.tableNumber}"),
         leading: IconButton(
@@ -84,13 +133,11 @@ class _OrderScreenState extends State<OrderScreen> {
           : Stack(
               children: [
                 ListView(
-                  padding: const EdgeInsets.only(bottom: 100, top: 10),
+                  padding: const EdgeInsets.only(bottom: 120, top: 10),
                   children: groupedMenu.keys.map((category) {
                     return Column(
                       children: [
-                        // Header Kategori (Makanan Utama, Minuman, dll)
                         _buildCategoryHeader(category),
-                        // Daftar Item dalam kategori tersebut
                         ...groupedMenu[category]!.map((item) => _buildMenuCard(item)),
                       ],
                     );
@@ -108,7 +155,7 @@ class _OrderScreenState extends State<OrderScreen> {
       margin: const EdgeInsets.symmetric(vertical: 15),
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.primary, // Maroon [cite: 47]
+        color: AppColors.primary, 
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(
@@ -123,19 +170,22 @@ class _OrderScreenState extends State<OrderScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.primary, // Card Maroon [cite: 55]
-        borderRadius: BorderRadius.circular(50), // Sudut sangat melengkung sesuai gambar
+        color: AppColors.primary, 
+        borderRadius: BorderRadius.circular(20), // Card style
       ),
       child: Row(
         children: [
-          // Gambar Menu Bulat
+          // Gambar Menu
           CircleAvatar(
             radius: 35,
             backgroundColor: Colors.white24,
-            backgroundImage: AssetImage(item.img),
+            backgroundImage: AssetImage(item.img), 
+            // Pastikan aset gambar tersedia, jika error gunakan Icon sebagai fallback di errorBuilder
+            onBackgroundImageError: (_, __) {}, 
           ),
           const SizedBox(width: 15),
-          // Detail Menu
+          
+          // Detail Teks
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +208,8 @@ class _OrderScreenState extends State<OrderScreen> {
               ],
             ),
           ),
-          // Kontrol Quantity (Plus/Minus)
+          
+          // Kontrol Qty
           _buildQtyControl(item),
         ],
       ),
@@ -191,45 +242,38 @@ class _OrderScreenState extends State<OrderScreen> {
       bottom: 0, left: 0, right: 0,
       child: Container(
         padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))]
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("$_totalItems Item terpilih", style: const TextStyle(color: Colors.white70)),
+                Text("$_totalItems Item", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                 Text(
                   "Total: Rp ${_totalPrice.toStringAsFixed(0)}",
-                  style: const TextStyle(color: AppColors.accent, fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: AppColors.primary, fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
-            ElevatedButton(
-              onPressed: () {
-                // Kirim data item yang dipesan ke halaman pembayaran
-                List<MenuItem> orderedItems = _allMenu.where((i) => i.qty > 0).toList();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PaymentScreen(
-                      tableNumber: widget.tableNumber,
-                      totalTagihan: _totalPrice,
-                    ),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            const SizedBox(height: 15),
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                onPressed: _isSending ? null : _submitOrder, // Panggil fungsi kirim
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.accent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                child: _isSending
+                    ? const CircularProgressIndicator(color: AppColors.accent)
+                    : const Text("KONFIRMASI PESANAN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
-              child: const Text("LANJUT BAYAR", style: TextStyle(fontWeight: FontWeight.bold)),
             )
           ],
         ),
