@@ -39,8 +39,8 @@ Restora memberikan solusi digital terintegrasi untuk menjembatani operasional st
 
 ## 5. Stack Technology
 ### **Frontend**
-* **Framework**: Flutter 3.x (Material 3)
-* **Language**: Dart
+* **Framework**: Flutter 3.35.3
+* **Language**: Dart 2.9.2
 * **Libraries**: `http` (API Communication), `intl` (Currency & Date Formatting), `setState/Provider` (State Management).
 
 ### **Backend & Database**
