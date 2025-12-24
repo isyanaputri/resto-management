@@ -1,0 +1,776 @@
+import 'package:flutter/material.dart';
+import 'dart:math';
+
+void main() {
+  runApp(const MyApp());
+}
+
+// --- CONFIG & THEME ---
+class AppColors {
+  // DUA WARNA UTAMA SESUAI REQUEST
+  static const Color darkMaroon = Color(0xFF420B08); // Background & Elemen Gelap
+  static const Color cream = Color(0xFFF4E6DD);     // Teks, Tombol, & Aksen Terang
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Reservasi Restoran',
+      theme: ThemeData(
+        fontFamily: 'Poppins', 
+        primaryColor: AppColors.cream,
+        scaffoldBackgroundColor: AppColors.darkMaroon,
+        
+        // Konfigurasi Color Scheme agar konsisten
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.cream,
+          onPrimary: AppColors.darkMaroon,
+          surface: AppColors.darkMaroon,
+          onSurface: AppColors.cream,
+          secondary: AppColors.cream,
+        ),
+        
+        // Konfigurasi Input Decoration Theme Global
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.cream.withOpacity(0.05), // Transparan cream dikit
+          hintStyle: TextStyle(color: AppColors.cream.withOpacity(0.5)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppColors.cream.withOpacity(0.2)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppColors.cream.withOpacity(0.2)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.cream),
+          ),
+        ),
+
+        // Konfigurasi Dialog & BottomSheet Theme
+        dialogBackgroundColor: AppColors.darkMaroon,
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: AppColors.darkMaroon,
+          modalBackgroundColor: AppColors.darkMaroon,
+        ),
+        
+        useMaterial3: true,
+      ),
+      home: const ReservationPage(),
+    );
+  }
+}
+
+// --- HALAMAN 1: FORM RESERVASI ---
+class ReservationPage extends StatefulWidget {
+  const ReservationPage({super.key});
+
+  @override
+  State<ReservationPage> createState() => _ReservationPageState();
+}
+
+class _ReservationPageState extends State<ReservationPage> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+  int _personCount = 2;
+  
+  bool _isAutoAssign = true; 
+  String? _selectedTable;
+
+  final List<String> _availableTables = [
+    'Meja B1 (4 Orang)',
+    'Meja B2 (4 Orang)',
+    'Meja A1 (2 Orang)',
+    'Meja VIP (6 Orang)',
+  ];
+
+  // Helper Text Date
+  String get _dateTimeText {
+    if (_selectedDate == null || _selectedTime == null) {
+      return "Pilih Tanggal & Waktu";
+    }
+    String hour = _selectedTime!.hour.toString().padLeft(2, '0');
+    String minute = _selectedTime!.minute.toString().padLeft(2, '0');
+    return "${_selectedDate!.day} ${_getMonthName(_selectedDate!.month)} ${_selectedDate!.year}, Pukul $hour:$minute";
+  }
+
+  String _getMonthName(int month) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+    return months[month - 1];
+  }
+
+  Future<void> _pickDateTime() async {
+    // Custom Theme untuk DatePicker agar sesuai warna
+    final DateTime? date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+      builder: (context, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.cream, // Header warna cream
+            onPrimary: AppColors.darkMaroon, // Teks di header maroon
+            surface: AppColors.darkMaroon, // Background kalender maroon
+            onSurface: AppColors.cream, // Teks tanggal cream
+          ),
+          dialogBackgroundColor: AppColors.darkMaroon,
+        ),
+        child: child!,
+      ),
+    );
+
+    if (date != null) {
+      final TimeOfDay? time = await showTimePicker(
+        context: context,
+        initialTime: const TimeOfDay(hour: 19, minute: 0),
+        builder: (context, child) => Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.cream,
+              onPrimary: AppColors.darkMaroon,
+              surface: AppColors.darkMaroon,
+              onSurface: AppColors.cream,
+            ),
+          ),
+          child: child!,
+        ),
+      );
+      if (time != null) {
+        setState(() {
+          _selectedDate = date;
+          _selectedTime = time;
+        });
+      }
+    }
+  }
+
+  void _submitReservation() {
+    if (_formKey.currentState!.validate()) {
+      if (_selectedDate == null || _selectedTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Mohon pilih tanggal dan waktu", style: TextStyle(color: AppColors.darkMaroon)), 
+            backgroundColor: AppColors.cream
+          ),
+        );
+        return;
+      }
+      if (!_isAutoAssign && _selectedTable == null) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Mohon pilih meja yang tersedia", style: TextStyle(color: AppColors.darkMaroon)), 
+            backgroundColor: AppColors.cream
+          ),
+        );
+        return;
+      }
+      _showConfirmationDialog();
+    }
+  }
+
+  void _showConfirmationDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkMaroon,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: AppColors.cream, width: 1), // Border atas cream
+      ),
+      builder: (BuildContext context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Konfirmasi Reservasi",
+                style: TextStyle(color: AppColors.cream, fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              _buildConfirmRow(Icons.calendar_today, "Waktu", _dateTimeText),
+              const SizedBox(height: 12),
+              _buildConfirmRow(Icons.people, "Tamu", "$_personCount Orang"),
+              const SizedBox(height: 12),
+              _buildConfirmRow(Icons.table_restaurant, "Meja", _isAutoAssign ? "Otomatis (Sesuai Kapasitas)" : _selectedTable!),
+              const SizedBox(height: 24),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context); 
+                    _processBooking(); 
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.cream, // Tombol Cream
+                    foregroundColor: AppColors.darkMaroon, // Teks Maroon
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Ya, Konfirmasi", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _processBooking() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.darkMaroon, 
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.cream.withOpacity(0.3))
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              CircularProgressIndicator(color: AppColors.cream),
+              SizedBox(height: 16),
+              Text("Memproses...", style: TextStyle(color: AppColors.cream)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ReservationSuccessPage()),
+      );
+    });
+  }
+
+  Widget _buildConfirmRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.cream.withOpacity(0.7), size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontFamily: 'Poppins', color: AppColors.cream),
+              children: [
+                TextSpan(text: "$label: ", style: TextStyle(color: AppColors.cream.withOpacity(0.7))),
+                TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.cream),
+          onPressed: () {},
+        ),
+        title: const Text(
+          "Formulir Reservasi Meja",
+          style: TextStyle(color: AppColors.cream, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- SECTION 1: DETAIL RESERVASI ---
+              _buildSectionTitle("Detail Reservasi"),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.cream.withOpacity(0.05), // Sedikit transparan untuk pemisah
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.cream.withOpacity(0.1)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Tanggal dan Waktu", style: TextStyle(color: AppColors.cream.withOpacity(0.7), fontSize: 13)),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: _pickDateTime,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cream.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.cream.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, color: AppColors.cream, size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              _dateTimeText,
+                              style: const TextStyle(color: AppColors.cream, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Stepper Jumlah Orang
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.people_outline, color: AppColors.cream, size: 22),
+                            const SizedBox(width: 10),
+                            Text("Jumlah Orang", style: TextStyle(color: AppColors.cream, fontSize: 15)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            _buildCircleBtn(Icons.remove, () {
+                              if (_personCount > 1) setState(() => _personCount--);
+                            }),
+                            Container(
+                              width: 40, 
+                              alignment: Alignment.center,
+                              child: Text("$_personCount", style: const TextStyle(color: AppColors.cream, fontSize: 16, fontWeight: FontWeight.bold))
+                            ),
+                            _buildCircleBtn(Icons.add, () {
+                              setState(() => _personCount++);
+                            }),
+                          ],
+                        )
+                      ],
+                    )
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // --- SECTION 2: PREFERENSI MEJA ---
+              _buildSectionTitle("Preferensi Meja"),
+              Container(
+                padding: const EdgeInsets.all(16), 
+                decoration: BoxDecoration(
+                  color: AppColors.cream.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.cream.withOpacity(0.1)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Toggle Switch
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.cream.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.cream.withOpacity(0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildToggleBtn("Otomatis", _isAutoAssign, () {
+                              setState(() => _isAutoAssign = true);
+                            }),
+                          ),
+                          Expanded(
+                            child: _buildToggleBtn("Pilih Meja", !_isAutoAssign, () {
+                              setState(() => _isAutoAssign = false);
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    AnimatedCrossFade(
+                      firstChild: Container(), 
+                      secondChild: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
+                          Text("Pilih Meja", style: TextStyle(color: AppColors.cream.withOpacity(0.7), fontSize: 13)),
+                          const SizedBox(height: 8),
+                          _buildCustomDropdown(),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Meja akan disiapkan sesuai dengan kapasitas tamu.",
+                            style: TextStyle(color: AppColors.cream.withOpacity(0.5), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      crossFadeState: _isAutoAssign ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                      duration: const Duration(milliseconds: 300),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // --- SECTION 3: KONTAK ---
+              _buildSectionTitle("Informasi Kontak"),
+              _buildLabel("Nama Lengkap"),
+              _buildDarkTextField(controller: _nameController, hint: "Masukkan nama lengkap", icon: Icons.person_outline),
+              const SizedBox(height: 16),
+              _buildLabel("Nomor Telepon"),
+              _buildDarkTextField(controller: _phoneController, hint: "Contoh: 08123456789", icon: Icons.phone_outlined, inputType: TextInputType.phone),
+
+              const SizedBox(height: 24),
+
+              // --- SECTION 4: REQUEST ---
+              _buildSectionTitle("Permintaan Khusus"),
+              _buildLabel("Catatan Tambahan (Opsional)"),
+              _buildDarkTextField(
+                controller: _noteController, 
+                hint: "Contoh: Kursi bayi, area bebas asap rokok...", 
+                maxLines: 4,
+                icon: null,
+              ),
+
+              const SizedBox(height: 40),
+
+              // --- FOOTER BUTTON ---
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _submitReservation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.cream, // Tombol Cream
+                    foregroundColor: AppColors.darkMaroon, // Text Maroon
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 5,
+                    shadowColor: AppColors.cream.withOpacity(0.2),
+                  ),
+                  child: const Text(
+                    "Reservasi Sekarang",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- WIDGET BUILDERS ---
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Text(
+        title,
+        style: const TextStyle(color: AppColors.cream, fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        title,
+        style: TextStyle(color: AppColors.cream.withOpacity(0.7), fontSize: 13),
+      ),
+    );
+  }
+
+  Widget _buildCircleBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.cream.withOpacity(0.1), 
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.cream.withOpacity(0.3))
+        ),
+        child: Icon(icon, color: AppColors.cream, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildToggleBtn(String text, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.cream : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isActive ? AppColors.darkMaroon : AppColors.cream.withOpacity(0.5),
+            fontSize: 13,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.cream.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cream.withOpacity(0.2)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedTable,
+          hint: Row(
+            children: [
+              const Icon(Icons.table_restaurant, color: AppColors.cream, size: 20),
+              const SizedBox(width: 12),
+              Text("Pilih meja anda", style: TextStyle(color: AppColors.cream.withOpacity(0.5), fontSize: 14)),
+            ],
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.cream),
+          isExpanded: true,
+          dropdownColor: AppColors.darkMaroon,
+          style: const TextStyle(color: AppColors.cream),
+          items: _availableTables.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Row(
+                children: [
+                  const Icon(Icons.table_restaurant, color: AppColors.cream, size: 20),
+                  const SizedBox(width: 12),
+                  Text(value),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            setState(() {
+              _selectedTable = val;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDarkTextField({
+    required TextEditingController controller,
+    required String hint,
+    IconData? icon,
+    int maxLines = 1,
+    TextInputType inputType = TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      style: const TextStyle(color: AppColors.cream),
+      maxLines: maxLines,
+      keyboardType: inputType,
+      validator: (val) => val!.isEmpty && maxLines == 1 ? "Wajib diisi" : null,
+      decoration: InputDecoration(
+        hintText: hint,
+        // Properti dekorasi lain diambil dari Theme global (MaterialApp theme)
+        prefixIcon: icon != null ? Icon(icon, color: AppColors.cream.withOpacity(0.7), size: 22) : null,
+      ),
+    );
+  }
+}
+
+// --- HALAMAN 2: SUCCESS PAGE (DUA WARNA) ---
+class ReservationSuccessPage extends StatelessWidget {
+  const ReservationSuccessPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.darkMaroon,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.cream.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.cream, width: 2),
+                ),
+                child: const Center(
+                  child: Icon(Icons.check, size: 60, color: AppColors.cream),
+                ),
+              ),
+              const SizedBox(height: 32),
+              
+              const Text(
+                "Reservasi Berhasil!",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.cream,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Konfirmasi telah dikirim ke email Anda.\nSilakan cek inbox untuk detail lengkapnya.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.cream.withOpacity(0.7), fontSize: 14),
+              ),
+
+              const SizedBox(height: 40),
+
+              // Dashed Box Code
+              CustomPaint(
+                painter: DashedRectPainter(color: AppColors.cream, gap: 5.0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: const [
+                      Text(
+                        "KODE RESERVASI",
+                        style: TextStyle(color: AppColors.cream, fontSize: 12, letterSpacing: 1.5),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        "B4T7K9",
+                        style: TextStyle(
+                          color: AppColors.cream, 
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+              
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.cream,
+                    foregroundColor: AppColors.darkMaroon,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                  child: const Text(
+                    "Selesai",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- UTILS: Custom Painter ---
+class DashedRectPainter extends CustomPainter {
+  final double strokeWidth;
+  final Color color;
+  final double gap;
+
+  DashedRectPainter({
+    this.strokeWidth = 1.5,
+    this.color = Colors.red,
+    this.gap = 5.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    Paint dashedPaint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    double x = size.width;
+    double y = size.height;
+
+    Path path = Path();
+    path.moveTo(0, 0);
+    _drawDashedLine(canvas, dashedPaint, const Point(0, 0), Point(x, 0)); // Top
+    _drawDashedLine(canvas, dashedPaint, Point(x, 0), Point(x, y)); // Right
+    _drawDashedLine(canvas, dashedPaint, Point(x, y), Point(0, y)); // Bottom
+    _drawDashedLine(canvas, dashedPaint, Point(0, y), const Point(0, 0)); // Left
+  }
+
+  void _drawDashedLine(Canvas canvas, Paint paint, Point<double> a, Point<double> b) {
+    double dx = b.x - a.x;
+    double dy = b.y - a.y;
+    double distance = sqrt(dx * dx + dy * dy);
+    double currentDist = 0;
+    
+    while (currentDist < distance) {
+      double startX = a.x + (dx / distance) * currentDist;
+      double startY = a.y + (dy / distance) * currentDist;
+      double endDist = min(currentDist + 5, distance); 
+      double endX = a.x + (dx / distance) * endDist;
+      double endY = a.y + (dy / distance) * endDist;
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
+      currentDist += 5 + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
